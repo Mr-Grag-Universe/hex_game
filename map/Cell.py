@@ -7,8 +7,13 @@ class Cell:
         self.surf = surf
         self.height = height
 
+        self.pos = (x, y)
+
     def set_surface(self, surf):
         self.surf = surf
     
     def __repr__(self):
         return f"[x={self.x}, y={self.y}]"
+    
+    def is_passable(self):
+        return self.surf.speed != 0

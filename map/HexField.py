@@ -1,3 +1,4 @@
+import numpy as np
 from typing import *
 
 from .Cell import Cell
@@ -155,6 +156,23 @@ class HexField:
 
     def get_neighbour_i_j(self, i, j, direction : Literal[0, 1, 2, 3, 4, 5] = 0):
         return self.get_neighbour_x_y(self, *self.ij2xy(i, j), direction=direction)
+    
+    def dist(self, pos_1, pos_2):
+        return np.sqrt((pos_1[0]-pos_2[0])**2 + (pos_1[1]-pos_2[1])**2)
+
+    def get_neighbours(self, pos):
+        N = []
+        for d in range(6):
+            try:
+                N.append(self.get_neighbour_x_y(*pos, direction=d))
+            except:
+                pass
+        return N
+
+    def get_neighbours_in_order_to(self, pos):
+        neighbours = self.get_neighbours(pos)
+        neighbours.sort(key = lambda n : self.dist(n.pos, pos))
+        return neighbours
 
     def set_heights(self, heights):
         for (x, y), h in heights.items():

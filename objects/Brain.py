@@ -52,41 +52,90 @@ class PreNet(nn.Module):
 
         return out
 
-class ArcherNet(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.actions = ['move', 'attack']
-        self.fc = nn.Linear(128, len(self.actions))
+# class ArcherNet(nn.Module):
+#     def __init__(self):
+#         super().__init__()
+#         self.actions = ['move', 'attack']
+#         self.fc = nn.Linear(128, len(self.actions))
     
-    def forward(self, x):
-        return self.fc(x)
+#     def forward(self, x):
+#         return self.fc(x)
 
-class KnightNet(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.actions = ['move', 'attack']
-        self.fc = nn.Linear(128, len(self.actions))
+# class KnightNet(nn.Module):
+#     def __init__(self):
+#         super().__init__()
+#         self.actions = ['move', 'attack']
+#         self.fc = nn.Linear(128, len(self.actions))
     
-    def forward(self, x):
-        return self.fc(x)
-    
+#     def forward(self, x):
+#         return self.fc(x)
+
 class ArcherBrain(Brain):
     def __init__(self):
-        super().__init__(nn.Sequential(PreNet(), ArcherNet()), nn.Embedding(3, 128))
+        self.actions = ['move', 'attack']
+        self.chose_action_head = nn.Linear(128, len(self.actions))
+        self.actions_heads = {
+            'move' : nn.Linear(128, 2),
+            'attack' : nn.Linear(128, 1)
+        }
+        self.prenet = PreNet()
+        super().__init__(self.prenet, nn.Embedding(3, 128))
     
     def think(self, data):
         pred = super().think(data)
-        action = ['move', 'attack'][torch.argmax(pred)]
-        return {'type' : action, 'params' : {'dist' : 1.}}
+
+        action = self.chose_action_head(pred)
+        action = self.actions[torch.argmax(action)]
+        
+        match action:
+            case 'move':
+                pred = self.actions_heads['move'](pred)
+                x, y = tuple(pred)
+                # проецируем, если вышли за границы поля
+                x = torch.clip(x, 0, data['field']['x_max'])
+                y = torch.clip(y, 1, data['field']['y_max'])
+                # x до ближайшей оси x
+                x = round(float(x))
+                # y до ближайшей оси y
+                y = round(float(y) * 2) / 2
+                params = {'pos' : (x, y)}
+            case 'attack':
+                params = None
+        
+        return {'type' : action, 'params' : params}
 
 class KnightBrain(Brain):
     def __init__(self):
-        super().__init__(nn.Sequential(PreNet(), KnightNet()), nn.Embedding(3, 128))
+        self.actions = ['move', 'attack']
+        self.chose_action_head = nn.Linear(128, len(self.actions))
+        self.actions_heads = {
+            'move' : nn.Linear(128, 2),
+            'attack' : nn.Linear(128, 1)
+        }
+        self.prenet = PreNet()
+        super().__init__(self.prenet, nn.Embedding(3, 128))
     
     def think(self, data):
         pred = super().think(data)
-        action = ['move', 'attack'][torch.argmax(pred)]
-        return {'type' : action, 'params' : {'dist' : 1.}}
+        action = self.chose_action_head(pred)
+        action = self.actions[torch.argmax(action)]
+        
+        match action:
+            case 'move':
+                pred = self.actions_heads['move'](pred)
+                x, y = tuple(pred)
+                # проецируем, если вышли за границы поля
+                x = torch.clip(x, 0, data['field']['x_max'])
+                y = torch.clip(y, 1, data['field']['y_max'])
+                # x до ближайшей оси x
+                x = round(float(x))
+                # y до ближайшей оси y
+                y = round(float(y) * 2) / 2
+                params = {'pos' : (x, y)}
+            case 'attack':
+                params = None
+        
+        return {'type' : action, 'params' : params}
 
 if __name__ == '__main__':
     brain = ArcherBrain()
