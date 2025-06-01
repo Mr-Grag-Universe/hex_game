@@ -51,17 +51,25 @@ class MatplotlibRenderer(Renderer):
     
 
     def render_warriors(self, warriors : Iterable):
-        x, y, c = [], [], []
+        x, y, c, s = [], [], [], []
+        size = 200
+        p = 0.5**2
         for w in warriors:
             x.append(w.pos[0]*self.dx)
             y.append(w.pos[1]*2)
             c.append(self.assets['warriors'][w.get_info()['class']])
+            s.append(w.health*size*p)
         
-        df = pd.DataFrame({'x' : x, 'y' : y, 'c' : c})
-        sns.scatterplot(df, x='x', y='y', color='c', ax=self.ax)
+        df = pd.DataFrame({'x' : x, 'y' : y, 'c' : c, 's' : s})
+        # print(df)
+        # self.ax = sns.scatterplot(df, x='x', y='y', hue='c', ax=self.ax, s=size)
+        # sns.scatterplot(df, x='x', y='y', color='white', ax=self.ax, s=s)
+        self.ax.scatter(x, y, c=c, alpha=1., s=size) #, edgecolors='black')
+        self.ax.scatter(x, y, c='white', alpha=1., s=s)
+        # plt.legend(loc='none')
 
     def render_warrior(self, warrior):
-        self.ax.scatter
+        pass
 
     def save(self, path : str = 'game_record.gif'):
         animation = self.camera.animate()

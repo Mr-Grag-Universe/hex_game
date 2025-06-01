@@ -23,16 +23,21 @@ class Game:
         self.config = config
 
         self.team_counter = CyclicCounter(len(teams))
+        self.n_iter = 0
 
     def step(self, warriors : Optional[Iterable] = None):
         '''
             randomly chose 1 warrior from current team or from any passed sequence of warriors
             ask warrior for action till it's now enough
         '''
+        if self.n_iter >= self.max_iter:
+            raise RuntimeError("n_iter is >= max_iter! reset env to continue.")
         if warriors is None:
             warriors = self.teams[self.team_counter.get()]
             self.team_counter.inc()
+        self.n_iter += 1
         
+        game_stopped = False
         warrior = random.choice(warriors)
         stop = False
         actions = {'move' : [], 'attack' : []}
@@ -54,6 +59,10 @@ class Game:
                     self.renderer.render(self)
             if len(actions['attack']) > 0 and len(actions['move']) > 0 and actions['move'][-1]['info']['accum_sum'] >= self.config.data["game"]['max_dist']['other']:
                 stop = True
+        
+        if self.n_iter == self.max_iter:
+            game_stopped = True
+        return game_stopped
 
     def process_action(self, warrior, action, actions):
         max_dist = self.config.data["game"]['max_dist']['other']
@@ -79,6 +88,9 @@ class Game:
                 if acc_sum+d >= self.config.data["game"]['max_dist']['other']:
                     return True, info
             case 'attack':
+                enemy_ind = action['params']['enemy_ind']
+                enemy = self.teams[self.team_counter.get()][enemy_ind]
+                enemy.health -= action['params']['damage']
                 info = {}
             case _:
                 raise "wrong action type"
@@ -91,32 +103,27 @@ class Game:
         best_dist = self.field.hex_field.dist(start, end)
 
         while stack:
-            print("1")
             current_position, path = stack.pop()
-            print("2")
             if current_position == end:
                 return best_path, best_dist
             if current_position in visited:
                 continue
             visited.add(current_position)
 
-            print("3")
-
-            N = self.field.hex_field.get_neighbours_in_order_to(current_position)
-            print(list(map(lambda x : x.pos, N)))
-            for neighbour in N:
+            N = self.field.hex_field.get_neighbours_in_order_to(current_position, end)
+            for neighbour in reversed(N):
                 if neighbour.is_passable() and neighbour.pos not in self.warrior_pos and (neighbour.pos not in visited):
                     new_path = path + [neighbour.pos]
                     stack.append((neighbour.pos, new_path))
 
                     d = self.field.hex_field.dist(new_path[-1], end)
-                    if d > best_dist:
+                    print(neighbour.pos, d)
+                    if d < best_dist:
                         best_dist = d
                         best_path = new_path.copy()
-            print(stack)
+            print(best_dist, best_path)
 
         return best_path, float(best_dist)
-
 
     def calc_path(self, pos, new_pos, max_dist=None):
         print("finding path...")
@@ -137,6 +144,7 @@ class Game:
                 data['class'].append(info['class'])
                 data['health'].append(info['health'])
         data['field'] = {'x_max' : self.field.hex_field.n_width, 'y_max' : self.field.hex_field.n_height}
+        data['n_enemy'] = len(self.teams[self.team_counter.get()])
         return data
 
     def get_warriors(self):

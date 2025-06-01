@@ -60,6 +60,8 @@ class HexField:
         self.n_width = n_width
         self.n_height = n_height
 
+        self.dx = 3/np.sqrt(3)
+
         self.field = self.generate_field(n_height, n_width)
 
     def xy_on_field(self, x, y):
@@ -158,7 +160,7 @@ class HexField:
         return self.get_neighbour_x_y(self, *self.ij2xy(i, j), direction=direction)
     
     def dist(self, pos_1, pos_2):
-        return np.sqrt((pos_1[0]-pos_2[0])**2 + (pos_1[1]-pos_2[1])**2)
+        return np.sqrt(((pos_1[0]-pos_2[0]) * self.dx)**2 + (2*(pos_1[1]-pos_2[1]))**2)
 
     def get_neighbours(self, pos):
         N = []
@@ -169,9 +171,9 @@ class HexField:
                 pass
         return N
 
-    def get_neighbours_in_order_to(self, pos):
+    def get_neighbours_in_order_to(self, pos, direction):
         neighbours = self.get_neighbours(pos)
-        neighbours.sort(key = lambda n : self.dist(n.pos, pos))
+        neighbours.sort(key = lambda n : self.dist(n.pos, direction))
         return neighbours
 
     def set_heights(self, heights):

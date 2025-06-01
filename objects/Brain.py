@@ -76,33 +76,33 @@ class ArcherBrain(Brain):
         self.chose_action_head = nn.Linear(128, len(self.actions))
         self.actions_heads = {
             'move' : nn.Linear(128, 2),
-            'attack' : nn.Linear(128, 1)
+            'attack' : nn.Linear(128, 8)
         }
         self.prenet = PreNet()
         super().__init__(self.prenet, nn.Embedding(3, 128))
     
     def think(self, data):
+        # print("archer thinks...")
         pred = super().think(data)
-
         action = self.chose_action_head(pred)
-        action = self.actions[torch.argmax(action)]
+        action = torch.argmax(action)
+        action_str = self.actions[action]
+        # print(action_str)
         
-        match action:
+        match action_str:
             case 'move':
+                # print('getting params for moving...')
                 pred = self.actions_heads['move'](pred)
-                x, y = tuple(pred)
-                # проецируем, если вышли за границы поля
-                x = torch.clip(x, 0, data['field']['x_max'])
-                y = torch.clip(y, 1, data['field']['y_max'])
-                # x до ближайшей оси x
-                x = round(float(x))
-                # y до ближайшей оси y
-                y = round(float(y) * 2) / 2
-                params = {'pos' : (x, y)}
+                pos = pred
+                pos[0] = torch.round(torch.clip(pos[0], 0, data['field']['x_max']))
+                pos[1] = torch.round(torch.clip(pos[1], 1, data['field']['y_max']) * 2) / 2
+                params = {'pos_pt' : pos, 'pos' : tuple(map(float, pos))}
             case 'attack':
-                params = None
+                pred = self.actions_heads['attack'](pred)
+                target = torch.argmax(pred[:data['n_enemy']])
+                params = {'enemy_ind_pt' : target, 'enemy_ind' : int(target), 'damage' : 0.1}
         
-        return {'type' : action, 'params' : params}
+        return {'type_pt' : action, 'type' : action_str, 'params' : params}
 
 class KnightBrain(Brain):
     def __init__(self):
@@ -110,32 +110,33 @@ class KnightBrain(Brain):
         self.chose_action_head = nn.Linear(128, len(self.actions))
         self.actions_heads = {
             'move' : nn.Linear(128, 2),
-            'attack' : nn.Linear(128, 1)
+            'attack' : nn.Linear(128, 8)
         }
         self.prenet = PreNet()
         super().__init__(self.prenet, nn.Embedding(3, 128))
     
     def think(self, data):
+        # print("knight thinks...")
         pred = super().think(data)
         action = self.chose_action_head(pred)
-        action = self.actions[torch.argmax(action)]
+        action = torch.argmax(action)
+        action_str = self.actions[action]
+        # print(action_str)
         
-        match action:
+        match action_str:
             case 'move':
+                # print('getting params for moving...')
                 pred = self.actions_heads['move'](pred)
-                x, y = tuple(pred)
-                # проецируем, если вышли за границы поля
-                x = torch.clip(x, 0, data['field']['x_max'])
-                y = torch.clip(y, 1, data['field']['y_max'])
-                # x до ближайшей оси x
-                x = round(float(x))
-                # y до ближайшей оси y
-                y = round(float(y) * 2) / 2
-                params = {'pos' : (x, y)}
+                pos = pred
+                pos[0] = torch.round(torch.clip(pos[0], 0, data['field']['x_max']))
+                pos[1] = torch.round(torch.clip(pos[1], 1, data['field']['y_max']) * 2) / 2
+                params = {'pos_pt' : pos, 'pos' : tuple(map(float, pos))}
             case 'attack':
-                params = None
+                pred = self.actions_heads['attack'](pred)
+                target = torch.argmax(pred[:data['n_enemy']])
+                params = {'enemy_ind_pt' : target, 'enemy_ind' : int(target), 'damage' : 0.1}
         
-        return {'type' : action, 'params' : params}
+        return {'type_pt' : action, 'type' : action_str, 'params' : params}
 
 if __name__ == '__main__':
     brain = ArcherBrain()
