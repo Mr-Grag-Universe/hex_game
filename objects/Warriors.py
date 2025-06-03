@@ -1,11 +1,9 @@
 from .GameObject import GameObject
-from .Brain import Brain, KnightBrain, ArcherBrain
 
 class Warrior(GameObject):
-    def __init__(self, pos, brain : Brain):
+    def __init__(self, pos):
         super().__init__(pos)
         print("warrior: ", self.pos)
-        self.brain = brain
         self.health = 1.0
 
     def get_action(self, data):
@@ -20,16 +18,26 @@ class Warrior(GameObject):
 
 class Knight(Warrior):
     def __init__(self, pos):
-        super().__init__(pos, KnightBrain())
+        super().__init__(pos)
         print("knight: ", self.pos)
     
     def get_info(self):
-        return {'position' : self.pos, 'class' : 'knight', 'health' : self.health}
+        return {
+                    'position' : self.pos, 
+                    'class' : 'knight', 
+                    'health' : self.health,
+                    'damage' : 0.5
+               }
 
 class Archer(Warrior):
     def __init__(self, pos):
-        super().__init__(pos, ArcherBrain())
+        super().__init__(pos)
         print("archer: ", self.pos)
     
     def get_info(self):
-        return {'position' : self.pos, 'class' : 'archer', 'health' : self.health}
+        return {
+                    'position' : self.pos, 
+                    'class' : 'archer', 
+                    'health' : self.health,
+                    'damage' : 0.3
+               }

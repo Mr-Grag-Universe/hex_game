@@ -1,7 +1,9 @@
 {
     "game" : {
         "max_dist" : {
-            "other" : 5
+            "other" : 5,
+            "knight" : 5,
+            "archer" : 3
         }
     }
 }

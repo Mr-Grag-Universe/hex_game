@@ -101,7 +101,7 @@ class HexField:
         return M
 
     def xy2ij(self, x, y):
-        return int(y)-1, x
+        return int(y)-1, int(x)
 
     def ij2xy(self, i, j):
         return j, i+1 + int(j%2 == 0) / 2
@@ -162,14 +162,20 @@ class HexField:
     def dist(self, pos_1, pos_2):
         return np.sqrt(((pos_1[0]-pos_2[0]) * self.dx)**2 + (2*(pos_1[1]-pos_2[1]))**2)
 
-    def get_neighbours(self, pos):
+    def get_neighbours(self, pos, mode : Literal['cell', 'pos'] = 'cell'):
         N = []
         for d in range(6):
             try:
                 N.append(self.get_neighbour_x_y(*pos, direction=d))
             except:
                 pass
-        return N
+        match mode:
+            case 'cell':
+                return N
+            case 'pos':
+                return [n.pos for n in N]
+            case _:
+                raise RuntimeError("there is not such mode")
 
     def get_neighbours_in_order_to(self, pos, direction):
         neighbours = self.get_neighbours(pos)
@@ -195,3 +201,6 @@ class HexField:
                 return [cell for row in self.field for cell in row]
             case _:
                 raise RuntimeError("there is not such get_cells mode!")
+    
+    def get_size(self):
+        return self.n_height, self.n_width
