@@ -117,7 +117,7 @@ class PyTorchify:
 
 def make_ppo_sampler(
     env,
-    policy,
+    policy_1, policy_2,
     num_runner_steps=2048,
     gamma=0.99,
     lambda_=0.95,
@@ -125,8 +125,8 @@ def make_ppo_sampler(
     num_minibatches=32,
 ):
     """Creates runner for PPO algorithm."""
-    runner_transforms = [AsArray(), GAE(policy, gamma=gamma, lambda_=lambda_)]
-    runner = GameRunner(env, policy, num_runner_steps, transforms=runner_transforms)
+    runner_transforms = [[AsArray(), GAE(policy_1, gamma=gamma, lambda_=lambda_)], [AsArray(), GAE(policy_2, gamma=gamma, lambda_=lambda_)]]
+    runner = GameRunner(env, [policy_1, policy_2], num_runner_steps, transforms=runner_transforms)
 
     sampler_transforms = [NormalizeAdvantages(), PyTorchify()]
     sampler = Sampler(

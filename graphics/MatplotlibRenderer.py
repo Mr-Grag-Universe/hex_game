@@ -30,6 +30,7 @@ class MatplotlibRenderer(Renderer):
         self.render_map(game.field)
         # self.render_obstacle(game)
         self.render_warriors(game.get_warriors())
+        self.render_action(game.actions)
         self.camera.snap()
 
     def render_map(self, game_map : Map):
@@ -70,6 +71,15 @@ class MatplotlibRenderer(Renderer):
 
     def render_warrior(self, warrior):
         pass
+
+    def render_action(self, actions):
+        if len(actions['type_log']):
+            if actions['type_log'][-1] == 'attack':
+                x, y = actions['attack'][-1]['info']['enemy_pos']
+                x_real_1, y_real_1 = x*self.dx, y*2
+                x, y = actions['attack'][-1]['info']['self_pos']
+                x_real_2, y_real_2 = x*self.dx, y*2
+                self.ax.plot([x_real_1, x_real_2], [y_real_1, y_real_2], color='yellow', linestyle='dashed')
 
     def save(self, path : str = 'game_record.gif'):
         animation = self.camera.animate()

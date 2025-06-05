@@ -25,7 +25,6 @@ class Game:
         self.field = field
         self.config = config
         self.logging = logging
-        self.teams = teams
         self.teams_start = deepcopy(teams)
     
     def reset(self, max_iter=1000, record=False, renderer : Renderer = None):
@@ -35,6 +34,7 @@ class Game:
             assert w.pos not in self.warrior_pos, RuntimeError("dublicated position")
             self.warrior_pos.add(w.pos)
         self.warrior = random.choice(self.teams[0])
+        self.actions = {'move' : [], 'attack' : [], 'type_log' : []}
         
         # запись
         self.record = record
@@ -46,7 +46,7 @@ class Game:
         self.team_counter = CyclicCounter(len(self.teams))
         self.max_iter = max_iter
         self.n_iter = 0
-        self.actions = {'move' : [], 'attack' : []}
+        self.reward = 0
         return self.observe()
 
     def action_is_correct(self, action) -> bool:
@@ -59,14 +59,19 @@ class Game:
                 return False
         return True
 
-    def game_is_over(self):
+    def step_is_over(self):
         attacked = len(self.actions['attack']) > 0
         moved_max = len(self.actions['move']) > 0 and self.actions['move'][-1]['info']['accum_sum'] >= self.config.data["game"]['max_dist']['other']
         return attacked and moved_max
 
+    def game_is_over(self):
+        killed_all = (len(self.teams[0]) * len(self.teams[1]) == 0)
+        return killed_all
+
     def next_team_warrior_prepare(self):
         self.team_counter.inc()
-        self.actions = {'move' : [], 'attack' : []}
+        self.actions = {'move' : [], 'attack' : [], 'type_log' : []}
+        # print(self.teams_start, self.teams[self.team_counter.get()])
         self.warrior = random.choice(self.teams[self.team_counter.get()])
 
     def step(self, action):
@@ -74,29 +79,41 @@ class Game:
             randomly chose 1 warrior from current team or from any passed sequence of warriors
             returns: -> reward, observation, stop_game
         '''
-        if self.n_iter >= self.max_iter:
-            raise RuntimeError("n_iter is >= max_iter! reset env to continue.")
+        if self.n_iter >= self.max_iter or self.game_is_over():
+            # raise RuntimeError("n_iter is >= max_iter! reset env to continue.")
+            return 0, self.reset(), True
         self.n_iter += 1
         
         game_stopped = (self.n_iter == self.max_iter)
 
-        if not self.action_is_correct(action):
-            self.next_team_warrior_prepare()
-            return -1., self.observe(), game_stopped
+        r_curr = 0
+        # штраф за урон от соперника
+        if len(self.actions['move']) == 0 and len(self.actions['attack']) == 0:
+            r_curr += self.reward
+            self.reward = 0
         
-        step_stop, info = self.process_action(action)
-        self.actions[action['type']].append({'params' : action['params'], 'info' : info})
+        if not self.action_is_correct(action) and not game_stopped:
+            self.next_team_warrior_prepare()
+            return -1. + r_curr, self.observe(), game_stopped or self.game_is_over()
+        
+        step_stop, info, r_curr_new, r_prev, cancelled = self.process_action(action)
+        r_curr += r_curr_new
+        self.reward += r_prev
+        if not cancelled:
+            self.actions[action['type']].append({'params' : action['params'], 'info' : info})
+            self.actions['type_log'].append(action['type'])
 
-        if self.record:
+        if self.record and not cancelled:
             self.renderer.render(self)
 
         data = self.collect_data()
-        if self.logging:
-            logging.info(f"warrior < {self.warrior.get_info()} > do < {action['type']} > with params < {action['params']} >")
+        if self.logging and not cancelled:
+            logging.info(f"warrior < {self.warrior.get_info()} > do < {action['type']} > with params < {action['params']} > and info < {info} >")
         if self.game_is_over():
             game_stopped = True
         
-        if step_stop:
+        step_stop = step_stop or self.step_is_over()
+        if step_stop and not game_stopped:
             self.next_team_warrior_prepare()
         
         if self.n_iter == self.max_iter:
@@ -104,11 +121,14 @@ class Game:
 
         if game_stopped:
             logging.info(f"Game Over!")
-        return 0., self.observe(), game_stopped
+        return r_curr, self.observe(), game_stopped
 
     def process_action(self, action):
+        # -> step_stop, info, r_curr, r_prev, cancelled
         w_info = self.warrior.get_info()
         max_dist = self.config.data["game"]['max_dist']['other']
+
+        r_curr, r_prev = 0, 0
         match action['type']:
             case 'move':
                 acc_sum = 0 if len(self.actions['move'])==0 else self.actions['move'][-1]['info']['accum_sum']
@@ -120,19 +140,22 @@ class Game:
                 # print("move: ", final_pos, d)
                 info = {'accum_sum' : acc_sum + d}
                 if final_pos == self.warrior.pos:
-                    return True, info
+                    r_curr -= 1
+                    return True, info, r_curr, r_prev, True
                 
                 # перемещаем игрока
-                self.warrior_pos.remove(self.warrior.pos)
+                # self.warrior_pos.remove(self.warrior.pos)
+                self.warrior_pos.discard(self.warrior.pos)
                 self.warrior_pos.add(final_pos)
                 self.warrior.pos = final_pos
 
                 # смотрим, исчерпан ли лимит ходьбы
                 if acc_sum+d >= self.config.data["game"]['max_dist']['other']:
-                    return True, info
+                    return True, info, r_curr, r_prev, False
             case 'attack':
                 enemy_pos = action['params']['pos']
-                enemies = self.teams[self.team_counter.get()]
+                t = (self.team_counter.get()+1) % 2
+                enemies = self.teams[t]
                 enemy_nearest = enemies[0]
                 d = dist(enemies[0].pos, enemy_pos)
                 for enemy in enemies:
@@ -141,13 +164,31 @@ class Game:
                         d = d_new
                         enemy_nearest = enemy
                 enemy = enemy_nearest
+
                 if w_info['class'] == 'knight':
-                    if enemy.pos not in self.field.hex_field.get_neighbours(self.warrior.pos, mode='pos'):
+                    if enemy.pos in self.field.hex_field.get_neighbours(self.warrior.pos, mode='pos'):
                         enemy.health -= w_info['damage']
-                info = {}
+                        if enemy.health <= 1e-5:
+                            self.warrior_pos.remove(enemy.pos)
+                            t = (self.team_counter.get()+1) % 2
+                            self.teams[t].remove(enemy)
+                            r_curr += 10
+                            r_prev -= 10
+                    else:
+                        r_curr -= 1
+                        return True, None, r_curr, 0., True
+                else:
+                    enemy.health -= w_info['damage']
+                    if enemy.health <= 0:
+                        self.warrior_pos.remove(enemy.pos)
+                        t = (self.team_counter.get()+1) % 2
+                        self.teams[t].remove(enemy)
+                        r_curr += 10
+                        r_prev -= 10
+                info = {'enemy_pos' : enemy.pos, 'self_pos' : self.warrior.pos, 'enemy_type' : enemy.get_info()['class']}
             case _:
                 raise RuntimeError("wrong action type")
-        return False, info
+        return False, info, r_curr, r_prev, False
 
     def find_path(self, start, end):
         stack = [(start, [start])]
@@ -224,17 +265,14 @@ class Game:
 
     def observe(self):
         layers = [
+            self.get_self_pos_layer(),
+            *self.get_warriors_layers(),
             *self.get_click_layers(),
             *self.get_surface_layers(),
 
-            self.get_self_pos_layer(),
             self.get_teams_layer(),
-
-            # self.get_class_layer(),
-            # self.get_health_layer(),
-            # self.get_damage_layer()
         ]
-        return torch.stack(layers)
+        return torch.stack(layers).to(dtype=torch.float32)
 
     def xy2ij_obs(self, x, y):
         return int((y-0.5)*2)-1, int(x)
@@ -278,7 +316,7 @@ class Game:
     def get_surface_layers(self):
         h, w = self.field.hex_field.get_size()
         w, h = int(w), int((h-0.5)*2)+1
-        surface_layers = [torch.zeros(h, w, dtype=torch.float32) for _ in range(1)]
+        surface_layers = [torch.zeros(h, w, dtype=torch.float16) for _ in range(1)]
         for cell in self.field.hex_field.get_cells(mode='flatten'):
             i, j = self.xy2ij_obs(*cell.pos)
             surface_layers[0][i,j] = cell.surf.speed
@@ -306,3 +344,17 @@ class Game:
     def get_warriors(self):
         return [w for team in self.teams for w in team]
     
+    def get_warriors_layers(self):
+        h, w = self.field.hex_field.get_size()
+        w, h = int(w), int((h-0.5)*2)+1
+        layer_class  = torch.zeros(h, w, dtype=torch.uint8)
+        layer_health = torch.zeros(h, w, dtype=torch.float16)
+        layer_damage = torch.zeros(h, w, dtype=torch.float16)
+        class_map = {'knight' : 1, 'archer' : 2}
+        for w in self.get_warriors():
+            i, j = self.xy2ij_obs(*w.pos)
+            info = w.get_info()
+            layer_class[i, j] = class_map[info['class']]
+            layer_health[i, j] = info['health']
+            layer_damage[i, j] = info['damage']
+        return [layer_class, layer_health, layer_damage]

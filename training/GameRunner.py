@@ -8,26 +8,31 @@ class GameRunner:
         self.game = game
         self.policy = policy
         self.nsteps = nsteps
-        self.transforms = transforms or []
+        self.transforms = transforms or [[], []]
         self.step_var = step_var if step_var is not None else 0
+
+        self.t = self.game.team_counter.get()
         self.latest_observation = self.game.reset()
 
     def reset(self):
         """ Resets env and runner states. """
         self.latest_observation = self.game.reset()
-        self.policy.reset()
+        self.policy[self.t].reset()
 
     def get_next(self):
         """ Runs the agent in the environment.  """
-        trajectory = defaultdict(list, {"actions": []})
-        observations = []
-        rewards = []
-        dones = []
+        trajectory = [defaultdict(list, {"actions": []}) for _ in range(2)]
+        observations = [[], []]
+        rewards = [[], []]
+        dones = [[], []]
         
         for i in range(self.nsteps):
-            observations.append(self.latest_observation)
+            # if i == 0:
+            #     print(self.game.teams, self.game.teams_start)
+            # print(i, end='; ')
+            observations[self.t].append(self.latest_observation)
             # print("acting...")
-            act = self.policy.act(self.latest_observation)
+            act = self.policy[self.t].act(self.latest_observation)
             
             if "actions" not in act:
                 raise ValueError("result of policy.act must contain 'actions' "
@@ -35,25 +40,28 @@ class GameRunner:
             assert type(act["actions"]) is np.ndarray, "Error: actions for environment must be numpy"
             
             for key, val in act.items():
-                trajectory[key].append(val)
+                trajectory[self.t][key].append(val)
 
-            r, obs, done = self.game.step(act['dist'].decode_action(trajectory["actions"][-1].argmax()))
+            r, obs, done = self.game.step(act['dist'].decode_action(trajectory[self.t]["actions"][-1].argmax()))
             self.latest_observation = obs
-            rewards.append(r)
-            dones.append(done)
+            rewards[self.t].append(r)
+            dones[self.t].append(done)
             self.step_var += 1
 
             # Only reset if the env is not batched. Batched envs should
             # auto-reset.
-            if np.all(done):
+            if done:
+                # print("reset")
                 self.latest_observation = self.game.reset()
+                self.t = self.game.team_counter.get()
 
-        trajectory.update(
-            observations=observations,
-            rewards=rewards,
-            dones=dones)
+        for i in range(2):
+            trajectory[i].update(
+                observations=observations[i],
+                rewards=rewards[i],
+                dones=dones[i])
 
-        for transform in self.transforms:
-            transform(trajectory, self.latest_observation)
+            for transform in self.transforms[i]:
+                transform(trajectory[i], self.latest_observation)
         
-        return trajectory
+        return trajectory[0]
