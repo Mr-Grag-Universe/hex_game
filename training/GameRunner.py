@@ -10,6 +10,7 @@ class GameRunner:
         self.nsteps = nsteps
         self.transforms = transforms or [[], []]
         self.step_var = step_var if step_var is not None else 0
+        self.device = next(self.policy[0].model.parameters()).device
 
         self.t = self.game.team_counter.get()
         self.latest_observation = self.game.reset()
@@ -26,10 +27,8 @@ class GameRunner:
         rewards = [[], []]
         dones = [[], []]
         
+        self.t = self.game.team_counter.get()
         for i in range(self.nsteps):
-            # if i == 0:
-            #     print(self.game.teams, self.game.teams_start)
-            # print(i, end='; ')
             observations[self.t].append(self.latest_observation)
             # print("acting...")
             act = self.policy[self.t].act(self.latest_observation)
@@ -53,7 +52,7 @@ class GameRunner:
             if done:
                 # print("reset")
                 self.latest_observation = self.game.reset()
-                self.t = self.game.team_counter.get()
+            self.t = self.game.team_counter.get()
 
         for i in range(2):
             trajectory[i].update(

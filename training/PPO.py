@@ -102,7 +102,11 @@ class NormalizeAdvantages:
     """Normalizes advantages to have zero mean and variance 1."""
     def __call__(self, batch):
         adv = batch["advantages"]
-        adv = (adv - adv.mean()) / (adv.std() + 1e-8)
+        # adv = (adv - adv.mean()) / (adv.std() + 1e-7)
+        if adv.numel() > 1:
+            adv = (adv - adv.mean()) / (adv.std() + 1e-8)
+        else:
+            adv = adv - adv.mean()
         batch["advantages"] = adv
 
 class PyTorchify:

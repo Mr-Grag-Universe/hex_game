@@ -33,14 +33,13 @@ class GAE:
         gae = 0.0
         for step in reversed(range(env_steps)):
             if step == env_steps - 1:
-                next_value = value_target
-
+                next_value = torch.tensor(value_target)
             else:
                 next_value = trajectory["values"][step + 1]
 
             delta = (
                 trajectory["rewards"][step]
-                + self.gamma * torch.tensor(next_value) * is_not_done[step]
+                + self.gamma * next_value * is_not_done[step]
                 - trajectory["values"][step]
             )
 

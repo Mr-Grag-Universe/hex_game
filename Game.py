@@ -92,10 +92,15 @@ class Game:
             r_curr += self.reward
             self.reward = 0
         
+        game_stopped = game_stopped or self.game_is_over()
         if not self.action_is_correct(action) and not game_stopped:
             self.next_team_warrior_prepare()
-            return -1. + r_curr, self.observe(), game_stopped or self.game_is_over()
+            return -1. + r_curr, self.observe(), game_stopped
         
+        if action['type'] == 'none':
+            self.next_team_warrior_prepare()
+            return r_curr, self.observe(), game_stopped
+
         step_stop, info, r_curr_new, r_prev, cancelled = self.process_action(action)
         r_curr += r_curr_new
         self.reward += r_prev
@@ -111,6 +116,7 @@ class Game:
             logging.info(f"warrior < {self.warrior.get_info()} > do < {action['type']} > with params < {action['params']} > and info < {info} >")
         if self.game_is_over():
             game_stopped = True
+            r_curr += 50
         
         step_stop = step_stop or self.step_is_over()
         if step_stop and not game_stopped:
@@ -172,8 +178,8 @@ class Game:
                             self.warrior_pos.remove(enemy.pos)
                             t = (self.team_counter.get()+1) % 2
                             self.teams[t].remove(enemy)
-                            r_curr += 10
-                            r_prev -= 10
+                            r_curr += 5
+                            r_prev -= 5
                     else:
                         r_curr -= 1
                         return True, None, r_curr, 0., True
@@ -183,8 +189,8 @@ class Game:
                         self.warrior_pos.remove(enemy.pos)
                         t = (self.team_counter.get()+1) % 2
                         self.teams[t].remove(enemy)
-                        r_curr += 10
-                        r_prev -= 10
+                        r_curr += 5
+                        r_prev -= 5
                 info = {'enemy_pos' : enemy.pos, 'self_pos' : self.warrior.pos, 'enemy_type' : enemy.get_info()['class']}
             case _:
                 raise RuntimeError("wrong action type")
@@ -264,6 +270,7 @@ class Game:
 
 
     def observe(self):
+        # всего 
         layers = [
             self.get_self_pos_layer(),
             *self.get_warriors_layers(),
