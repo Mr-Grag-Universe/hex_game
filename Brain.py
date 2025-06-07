@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import torch
 from torch import nn
@@ -5,7 +6,7 @@ import torch.nn.functional as F
 from typing import *
 from bisect import bisect_left
 
-from utils import ij2xy_obs, xy2ij_obs
+from utils import ij2xy_obs, xy2ij_obs, load_weights
 
 class PreNet(nn.Module):
     def __init__(self, c, h, w):
@@ -295,4 +296,38 @@ class KnightBrain(nn.Module):
                                 'move'   : {'p' : p_1, 'heat_map' : heat_map_1}, 
                                 'attack' : {'p' : p_2, 'heat_map' : heat_map_2}
                                 })
+
+def load_prenet(obs_shape, file_path, device=None):
+    prenet = PreNet(*obs_shape)
+    prenet = load_weights(prenet, file_path, device=device)
+
+def load_brain(obs_shape, dir_path, brain_type='archer', device=None, **kwargs):
+    p = os.path.join(dir_path, 'prenet.pth')
+    prenet = load_prenet(obs_shape, p, device)
+    match brain_type:
+        case 'archer':
+            brain = ArcherBrain(prenet=prenet, **kwargs)
+        case 'knight':
+            brain = KnightBrain(prenet=prenet, **kwargs)
+        case _:
+            raise RuntimeError("wrong brain type to load passed")
     
+    p = os.path.join(dir_path, 'actions_heads_attack.pth')
+    brain.actions_heads_attack = load_weights(brain.actions_heads_attack, p, device)
+    p = os.path.join(dir_path, 'actions_heads_move.pth')
+    brain.actions_heads_move = load_weights(brain.actions_heads_move, p, device)
+
+    p = os.path.join(dir_path, 'chose_action_head.pth')
+    brain.chose_action_head = load_weights(brain.chose_action_head, p, device)
+
+    return brain
+
+def load_value(obs_shape, dir_path, device=None, **kwargs):
+    p = os.path.join(dir_path, 'prenet.pth')
+    prenet = load_prenet(obs_shape, p, device)
+
+    value = ValueNet(prenet=prenet)
+
+    p = os.path.join(dir_path, 'value_head.pth')
+    value.value_head = load_weights(value.value_head, p)
+    return value

@@ -1,7 +1,9 @@
+import os
 import torch
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
+from ..Brain import load_brain, load_value
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -19,3 +21,7 @@ class PolicyValueNetwork(nn.Module):
         distribution, mem_1 = self.policy(states, mem_1)
         value, mem_2 = self.value(states, mem_2)
         return distribution, mem_1, mem_2, value
+
+def load_policy_value_net(dir_path, obs_shape, device=None):
+    policy = load_brain(obs_shape, os.path.join(dir_path, 'policy'), 'archer', device)
+    value = load_value(obs_shape, os.path.join(dir_path, 'value'), device)
