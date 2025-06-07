@@ -8,7 +8,7 @@ class GAE:
         self.gamma = gamma
         self.lambda_ = lambda_
 
-    def __call__(self, trajectory, last_observation):
+    def __call__(self, trajectory, last_observation, memory):
         """
         This method should modify trajectory inplace by adding
         items with keys 'advantages' and 'value_targets' to it
@@ -17,7 +17,7 @@ class GAE:
             trajectory - dict from runner
             latest_observation - last state, numpy, (features)
         """
-        value_target = self.policy.act(last_observation)["values"]
+        value_target = self.policy.act(last_observation, *memory)["values"]
 
         env_steps = len(trajectory["rewards"])
 

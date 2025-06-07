@@ -13,7 +13,7 @@ class AsArray:
     """
     Converts lists of interactions to ndarray.
     """
-    def __call__(self, trajectory, last_observation):
+    def __call__(self, trajectory, last_observation, *args, **kwargs):
         # Modifies trajectory inplace.
         # Just switches python lists to numpy arrays
         for k, v in trajectory.items():
@@ -230,7 +230,7 @@ class PPO:
         """Computes loss for current batch"""
 
         # let's run our current policy on this batch
-        act = self.policy.act(batch["observations"], training=True)
+        act = self.policy.act(batch["observations"], mem_1=batch["mem_1"], mem_2=batch["mem_2"], training=True)
 
         # compute losses
         # note that we don't need entropy regularization for this env.

@@ -15,11 +15,14 @@ class PreNet(nn.Module):
         self.c = c
 
         self.conv1_1 = nn.Conv2d(c, 64, 3, padding=1)
-        self.conv1_2 = nn.Conv2d(c, 64, 5, padding=2)
-        self.conv1_3 = nn.Conv2d(c, 64, 7, padding=3)
-        self.conv1_4 = nn.Conv2d(c, 64, 9, padding=4)
+        # self.conv1_2 = nn.Conv2d(c, 64, 5, padding=2)
+        self.conv1_2 = nn.Conv2d(c, 64, 7, padding=3)
+        # self.conv1_4 = nn.Conv2d(c, 64, 9, padding=4)
         
-        self.conv_1x1 = nn.Conv2d(256, 256, 1)
+        self.conv_1x1 = nn.Conv2d(2*64, 256, 1)
+
+        self.memory_proj = nn.Linear(256*h*w, 256)
+        self.memory = nn.GRUCell(256, 256, True)
 
         # self.conv2_1 = nn.Conv2d(256, 256, 3, padding=1)
         # self.conv2_2 = nn.Conv2d(256, 256, 5, padding=2)
@@ -42,13 +45,18 @@ class PreNet(nn.Module):
                 if layer.bias is not None:
                     nn.init.zeros_(layer.bias)
 
-    def forward(self, x):
+    def forward(self, x, mem):
         out_1 = self.conv1_1(x)
         out_2 = self.conv1_2(x)
-        out_3 = self.conv1_3(x)
-        out_4 = self.conv1_4(x)
-        out = torch.selu(torch.cat([out_1, out_2, out_3, out_4], dim=int(len(x.shape) > 3)))
+        # out_3 = self.conv1_3(x)
+        # out_4 = self.conv1_4(x)
+        out = torch.selu(torch.cat([out_1, out_2], dim=int(len(x.shape) > 3)))
         out = torch.selu(self.conv_1x1(out))
+
+        proj = self.memory_proj(nn.Flatten(start_dim=-3)(out))
+        # print(proj.shape, mem.shape)
+        mem = self.memory(proj, mem)
+        
         # out_1 = self.conv2_1(out)
         # out_2 = self.conv2_2(out)
         # out_3 = self.conv2_3(out)
@@ -65,27 +73,28 @@ class PreNet(nn.Module):
         if out.shape[0] == 1:
             out = out.squeeze(0)
         # print("out: ", out.shape)
-        return out
+        return out, mem
 
 class ValueNet(nn.Module):
     def __init__(self, size=None, prenet : Optional[PreNet] = None):
         super().__init__()
         if size is not None:
-            h, w = size
+            c, h, w = size
         else:
-            h, w = prenet.h, prenet.w
+            c, h, w = prenet.c, prenet.h, prenet.w
         self.h = h
         self.w = w
+        self.c = c
         self.value_head = nn.Sequential(nn.Flatten(), nn.Linear(256*h*w, 64), nn.Linear(64, 1))
         self.prenet = prenet
         if prenet is None:
-            self.prenet = PreNet(h, w)
+            self.prenet = PreNet(c, h, w)
     
-    def forward(self, state : torch.Tensor):
+    def forward(self, state : torch.Tensor, mem : torch.Tensor):
         B = len(state) if state.ndim == 4 else 1
-        out = self.prenet(state)
+        out, mem = self.prenet(state, mem)
         # print(out.shape, (256, self.h, self.w), nn.Flatten()(out).shape)
-        return self.value_head(out.view(B, 256, self.h, self.w))
+        return self.value_head(out.view(B, 256, self.h, self.w)), mem
 
 class Distribution:
     def __init__(self, dist : dict):
@@ -161,7 +170,7 @@ class ArcherBrain(nn.Module):
         self.actions_heads_attack = nn.Sequential(nn.Conv2d(256, 64, 3, padding=1), nn.SELU(), nn.Conv2d(64, 16, 3, padding=1), nn.SELU(), nn.Conv2d(16, 1, 3, padding=1), nn.Softmax(dim=-1))
         self.prenet = prenet
         if prenet is None:
-            self.prenet = PreNet(h, w)
+            self.prenet = PreNet(c, h, w)
 
         self.initialize_weights()
 
@@ -177,8 +186,8 @@ class ArcherBrain(nn.Module):
                 if layer.bias is not None:
                     nn.init.zeros_(layer.bias)
     
-    def forward(self, obs):
-        pred = self.prenet(obs)
+    def forward(self, obs, mem):
+        pred, mem = self.prenet(obs, mem)
         action_proba = self.chose_action_head(nn.Flatten(start_dim=int(len(pred.shape) > 3))(pred))
         if not self.return_dist:
             action = torch.argmax(input=action_proba)
@@ -216,7 +225,7 @@ class ArcherBrain(nn.Module):
                                 'move'   : {'p' : p_1, 'heat_map' : heat_map_1}, 
                                 'attack' : {'p' : p_2, 'heat_map' : heat_map_2},
                                 'none'   : {'p' : p_3, 'heat_map' : heat_map_3}
-                                })
+                                }), mem
 
 class KnightBrain(nn.Module):
     def __init__(self, size=None, prenet : Optional[PreNet] = None, return_dist=False):

@@ -14,7 +14,8 @@ class PolicyValueNetwork(nn.Module):
         self.value = value
         self.class_map = {'knight' : 1, 'archer' : 2}
 
-    def forward(self, states):
-        distribution = self.policy(states)
-        value = self.value(states)
-        return distribution, value
+    def forward(self, states, mem_1, mem_2):
+        # print(states.shape, mem_1.shape, mem_2.shape)
+        distribution, mem_1 = self.policy(states, mem_1)
+        value, mem_2 = self.value(states, mem_2)
+        return distribution, mem_1, mem_2, value
