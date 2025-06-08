@@ -152,8 +152,8 @@ class HexField:
                     raise RuntimeError("there is not such direction")
                 res = self.get_neighbour_x_y(x, y, direction=direction%6)
 
-        if self.debug:
-            assert self.ij_on_field(i, j), RuntimeError(f"there is not cell in <{direction}> direction (2 check)")
+        # if self.debug:
+        assert self.ij_on_field(i, j), RuntimeError(f"there is not cell in <{direction}> direction (2 check)")
         return res
 
     def get_neighbour_i_j(self, i, j, direction : Literal[0, 1, 2, 3, 4, 5] = 0):

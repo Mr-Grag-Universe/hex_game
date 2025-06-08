@@ -69,7 +69,7 @@ class Map:
         if debug:
             assert set(self.data['heights'].keys()) == set(self.data['surface'].keys())
         
-        self.hex_field = HexField(n_width=int(x_max-x_min+1), n_height=float(y_max-y_min+1))
+        self.hex_field = HexField(n_width=int(x_max-x_min+1), n_height=float(y_max-y_min+1), debug=True)
         self.hex_field.set_heights(self.data['heights'])
         self.hex_field.set_surface(self.data['surface'])
     

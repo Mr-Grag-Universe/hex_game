@@ -17,10 +17,10 @@ class PreNet(nn.Module):
 
         self.conv1_1 = nn.Conv2d(c, 64, 3, padding=1)
         self.conv1_2 = nn.Conv2d(c, 64, 7, padding=3)
-        self.conv_1x1 = nn.Conv2d(2*64, 256, 1)
+        self.conv_1x1 = nn.Conv2d(2*64, 128, 1)
 
-        self.memory_proj = nn.Linear(256*h*w, 256)
-        self.memory = nn.GRUCell(256, 256, True)
+        self.memory_proj = nn.Linear(128*h*w, 128)
+        self.memory = nn.GRUCell(128, 128, True)
 
         self.initialize_weights()
 
@@ -66,7 +66,7 @@ class ValueNet(nn.Module):
         self.h = h
         self.w = w
         self.c = c
-        self.value_head = nn.Sequential(nn.Linear(256+256*h*w, 64), nn.Linear(64, 1))
+        self.value_head = nn.Sequential(nn.Linear(128+128*h*w, 64), nn.Linear(64, 1))
         self.prenet = prenet
         if prenet is None:
             self.prenet = PreNet(c, h, w)
@@ -75,7 +75,7 @@ class ValueNet(nn.Module):
         B = len(state) if state.ndim == 4 else 1
         out, mem_new = self.prenet(state, mem)
         # print(out.shape, (256, self.h, self.w), nn.Flatten()(out).shape)
-        inp = torch.cat([nn.Flatten()(out.view(B, 256, self.h, self.w)), mem.view(B,-1)], dim=1)
+        inp = torch.cat([nn.Flatten()(out.view(B, 128, self.h, self.w)), mem.view(B,-1)], dim=1)
         return self.value_head(inp), mem_new
 
 class Distribution:
@@ -89,21 +89,20 @@ class Distribution:
         self.actions = list(dist.keys())
         self.actions_offset = []
         self.shapes = []
-        offset = 0
-        for action in self.actions:
-            self.actions_offset.append(offset)
-            shape = dist[action]['heat_map'].shape[-2:]
-            offset += shape[-2]*shape[-1]
-            self.shapes.append(shape)
-        
         hm_vectors = []
+        offset = 0
+
         for action in self.actions:
-            hm = dist[action]['heat_map'].flatten(start_dim=int(self.use_batch))
-            p = dist[action]['p']
-            if self.use_batch:
-                p = p.view(-1, 1)
-            d = hm*p
-            hm_vectors.append(d)
+            action_data = dist[action]
+            shape = action_data['heat_map'].shape[-2:]
+            self.shapes.append(shape)
+            self.actions_offset.append(offset)
+            offset += shape[-2] * shape[-1]
+
+            hm = action_data['heat_map'].flatten(start_dim=int(self.use_batch))
+            p = action_data['proba'].view(-1, 1) if self.use_batch else action_data['proba']
+            hm_vectors.append(hm * p)
+        
         self.all_proba_vector = torch.cat(hm_vectors, dim=int(self.use_batch))
         # print(self.all_proba_vector.sum(), self.all_proba_vector)
         self.m_dist = torch.distributions.Multinomial(1, probs=self.all_proba_vector)
@@ -131,8 +130,8 @@ class Distribution:
         pos = xy2ij_obs(*pos)
         i = self.actions.index(action)
         base = self.actions_offset[i]
-        matrix_offset = pos[0]*self.shapes[i][1]+pos[1]
-        return base+matrix_offset
+        matrix_offset = pos[0]*self.shapes[i][1] + pos[1]
+        return base + matrix_offset
 
 class ArcherBrain(nn.Module):
     def __init__(self, size=None, prenet : Optional[PreNet] = None, return_dist=False):
@@ -147,9 +146,9 @@ class ArcherBrain(nn.Module):
         self.c = c
         self.return_dist = return_dist
         self.actions = ['move', 'attack', 'none']
-        self.chose_action_head = nn.Sequential(nn.Linear(256+256*h*w, len(self.actions)), nn.Softmax(dim=-1))
-        self.actions_heads_move = nn.Sequential(nn.Conv2d(256, 64, 3, padding=1), nn.SELU(), nn.Conv2d(64, 16, 3, padding=1), nn.SELU(), nn.Conv2d(16, 1, 3, padding=1), nn.Softmax(dim=-1))
-        self.actions_heads_attack = nn.Sequential(nn.Conv2d(256, 64, 3, padding=1), nn.SELU(), nn.Conv2d(64, 16, 3, padding=1), nn.SELU(), nn.Conv2d(16, 1, 3, padding=1), nn.Softmax(dim=-1))
+        self.chose_action_head = nn.Sequential(nn.Linear(128+128*h*w, len(self.actions)), nn.Softmax(dim=-1))
+        self.actions_heads_move = nn.Sequential(nn.Conv2d(128, 64, 3, padding=1), nn.SELU(), nn.Conv2d(64, 16, 3, padding=1), nn.SELU(), nn.Conv2d(16, 1, 3, padding=1), nn.Softmax(dim=-1))
+        self.actions_heads_attack = nn.Sequential(nn.Conv2d(128, 64, 3, padding=1), nn.SELU(), nn.Conv2d(64, 16, 3, padding=1), nn.SELU(), nn.Conv2d(16, 1, 3, padding=1), nn.Softmax(dim=-1))
         self.prenet = prenet
         if prenet is None:
             self.prenet = PreNet(c, h, w)

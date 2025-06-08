@@ -6,6 +6,7 @@ import logging
 import torch
 import torch.nn.functional as F
 from collections import deque
+from functools import lru_cache
 from copy import deepcopy
 
 logging.basicConfig(
@@ -21,10 +22,11 @@ from graphics.Renderer import Renderer
 from utils import CyclicCounter, dist
 
 class Game:
-    def __init__(self, teams, field, config, logging=True):
+    def __init__(self, teams, field, config, logging=True, debug=True):
         self.field = field
         self.config = config
         self.logging = logging
+        self.debug = debug
         self.teams_start = deepcopy(teams)
     
     def reset(self, max_iter=1000, record=False, renderer : Renderer = None):
@@ -239,7 +241,7 @@ class Game:
             
             N = self.field.hex_field.get_neighbours(current_position)
             for neighbour in N:
-                if neighbour.is_passable() and neighbour.pos not in self.warrior_pos and (neighbour.pos not in visited):
+                if neighbour.is_passable() and (neighbour.pos not in visited) and neighbour.pos not in self.warrior_pos:
                     queue.append((neighbour.pos, d+1))
 
         return visited
@@ -320,6 +322,7 @@ class Game:
 
         return move_layer, attack_layer
 
+    @lru_cache(maxsize=None)
     def get_surface_layers(self):
         h, w = self.field.hex_field.get_size()
         w, h = int(w), int((h-0.5)*2)+1
