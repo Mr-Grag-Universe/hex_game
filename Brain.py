@@ -100,7 +100,7 @@ class Distribution:
             offset += shape[-2] * shape[-1]
 
             hm = action_data['heat_map'].flatten(start_dim=int(self.use_batch))
-            p = action_data['proba'].view(-1, 1) if self.use_batch else action_data['proba']
+            p = action_data['p'].view(-1, 1) if self.use_batch else action_data['p']
             hm_vectors.append(hm * p)
         
         self.all_proba_vector = torch.cat(hm_vectors, dim=int(self.use_batch))
