@@ -3,7 +3,7 @@ import torch
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
-from ..Brain import load_brain, load_value
+from Brain import load_brain, load_value
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
