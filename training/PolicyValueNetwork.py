@@ -23,5 +23,6 @@ class PolicyValueNetwork(nn.Module):
         return distribution, mem_1, mem_2, value
 
 def load_policy_value_net(dir_path, obs_shape, device=None):
-    policy = load_brain(obs_shape, os.path.join(dir_path, 'policy'), 'archer', device)
+    policy = load_brain(obs_shape, os.path.join(dir_path, 'policy'), 'archer', device, return_dist=True)
     value = load_value(obs_shape, os.path.join(dir_path, 'value'), device)
+    return PolicyValueNetwork(policy, value)

@@ -74,9 +74,10 @@ def plot_learning_stats(eval_results, plot_both=False):
     clear_output(True)
     fig, axs = plt.subplot_mosaic(schema)
     
-    plot_rewards(r_1, all_r, ax=axs['A'])
+    plot_rewards(r_1_mean, all_r, ax=axs['A'])
     plot_compare(r_1_mean, r_2_mean, all_r, ax=axs['B'])
 
+    plt.tight_layout()
     plt.draw()  # Force redraw
     plt.pause(0.1)  # Process GUI events
     plt.close()  # Close figure to prevent memory leaks
@@ -86,8 +87,8 @@ def plot_rewards(reward, all_r, ax=None):
         fig, ax = plt.subplots()
     ax.plot(reward, label='Average Reward', color='blue')
     ax.scatter(all_r['x'], all_r['r_1'], color='red')
-    ax.xlabel('iter')
-    ax.ylabel('reward')
+    ax.set_xlabel('iter')
+    ax.set_ylabel('reward')
     ax.set_title('Player №1 rewards')
     ax.legend()
     ax.grid(True)
@@ -97,10 +98,15 @@ def plot_compare(r_1, r_2, all_r=None, ax=None):
         fig, ax = plt.subplots()
     d = r_1 - r_2
     ax.plot(d)
+    ax.grid(True)
+    
     if all_r is not None:
         ax.scatter(all_r['x'], all_r['r_1'] - all_r['r_2'], color='red')
 
 def load_weights(model, file_path, device=None):
     if device is None:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    return model.load_state_dict(file_path, map_location=device)
+    model.load_state_dict(torch.load(file_path, weights_only=True))
+    model.to(device=device)
+    # model.eval()
+    return model

@@ -16,21 +16,11 @@ class PreNet(nn.Module):
         self.c = c
 
         self.conv1_1 = nn.Conv2d(c, 64, 3, padding=1)
-        # self.conv1_2 = nn.Conv2d(c, 64, 5, padding=2)
         self.conv1_2 = nn.Conv2d(c, 64, 7, padding=3)
-        # self.conv1_4 = nn.Conv2d(c, 64, 9, padding=4)
-        
         self.conv_1x1 = nn.Conv2d(2*64, 256, 1)
 
         self.memory_proj = nn.Linear(256*h*w, 256)
         self.memory = nn.GRUCell(256, 256, True)
-
-        # self.conv2_1 = nn.Conv2d(256, 256, 3, padding=1)
-        # self.conv2_2 = nn.Conv2d(256, 256, 5, padding=2)
-        # self.conv2_3 = nn.Conv2d(256, 256, 7, padding=3)
-        # self.conv2_4 = nn.Conv2d(256, 256, 9, padding=4)
-
-        # self.fc_inner = nn.Linear(256*self.h*self.w*4, 4)
 
         self.initialize_weights()
 
@@ -55,22 +45,12 @@ class PreNet(nn.Module):
         out = torch.selu(self.conv_1x1(out))
 
         proj = self.memory_proj(nn.Flatten(start_dim=-3)(out))
-        # print(proj.shape, mem.shape)
+        if len(mem.shape) < len(proj.shape):
+            mem = mem.unsqueeze(0)
+        elif len(mem.shape) > len(proj.shape):
+            proj = proj.squeeze(0)
         mem = self.memory(proj, mem)
         
-        # out_1 = self.conv2_1(out)
-        # out_2 = self.conv2_2(out)
-        # out_3 = self.conv2_3(out)
-        # out_4 = self.conv2_4(out)
-        # out = torch.cat([out_1, out_2, out_3, out_4], dim=int(len(x.shape) > 3))
-        # out = nn.Flatten()(out.view(-1, 1024, self.h, self.w))
-        # p = (torch.tanh(torch.selu(self.fc_inner(out)))+1) / 2
-        # p = p.view(-1, 4)
-        
-        # out =   p[:, 0].view(-1,1,1,1) * out_1.view(-1, 256, self.h, self.w) + \
-        #         p[:, 1].view(-1,1,1,1) * out_2.view(-1, 256, self.h, self.w) + \
-        #         p[:, 2].view(-1,1,1,1) * out_3.view(-1, 256, self.h, self.w) + \
-        #         p[:, 3].view(-1,1,1,1) * out_4.view(-1, 256, self.h, self.w)
         if out.shape[0] == 1:
             out = out.squeeze(0)
         # print("out: ", out.shape)
@@ -86,16 +66,17 @@ class ValueNet(nn.Module):
         self.h = h
         self.w = w
         self.c = c
-        self.value_head = nn.Sequential(nn.Flatten(), nn.Linear(256*h*w, 64), nn.Linear(64, 1))
+        self.value_head = nn.Sequential(nn.Linear(256+256*h*w, 64), nn.Linear(64, 1))
         self.prenet = prenet
         if prenet is None:
             self.prenet = PreNet(c, h, w)
     
     def forward(self, state : torch.Tensor, mem : torch.Tensor):
         B = len(state) if state.ndim == 4 else 1
-        out, mem = self.prenet(state, mem)
+        out, mem_new = self.prenet(state, mem)
         # print(out.shape, (256, self.h, self.w), nn.Flatten()(out).shape)
-        return self.value_head(out.view(B, 256, self.h, self.w)), mem
+        inp = torch.cat([nn.Flatten()(out.view(B, 256, self.h, self.w)), mem.view(B,-1)], dim=1)
+        return self.value_head(inp), mem_new
 
 class Distribution:
     def __init__(self, dist : dict):
@@ -166,7 +147,7 @@ class ArcherBrain(nn.Module):
         self.c = c
         self.return_dist = return_dist
         self.actions = ['move', 'attack', 'none']
-        self.chose_action_head = nn.Sequential(nn.Linear(256*h*w, len(self.actions)), nn.Softmax(dim=-1))
+        self.chose_action_head = nn.Sequential(nn.Linear(256+256*h*w, len(self.actions)), nn.Softmax(dim=-1))
         self.actions_heads_move = nn.Sequential(nn.Conv2d(256, 64, 3, padding=1), nn.SELU(), nn.Conv2d(64, 16, 3, padding=1), nn.SELU(), nn.Conv2d(16, 1, 3, padding=1), nn.Softmax(dim=-1))
         self.actions_heads_attack = nn.Sequential(nn.Conv2d(256, 64, 3, padding=1), nn.SELU(), nn.Conv2d(64, 16, 3, padding=1), nn.SELU(), nn.Conv2d(16, 1, 3, padding=1), nn.Softmax(dim=-1))
         self.prenet = prenet
@@ -189,7 +170,13 @@ class ArcherBrain(nn.Module):
     
     def forward(self, obs, mem):
         pred, mem = self.prenet(obs, mem)
-        action_proba = self.chose_action_head(nn.Flatten(start_dim=int(len(pred.shape) > 3))(pred))
+        flat_pred = nn.Flatten(start_dim=-3)(pred)
+        if len(flat_pred.shape) == 1:
+            mem = mem.flatten()
+        # print(pred.shape, flat_pred.shape, mem.shape)
+        inp = torch.cat([mem, flat_pred], dim=-1)
+        # print(inp.shape)
+        action_proba = self.chose_action_head(inp)
         if not self.return_dist:
             action = torch.argmax(input=action_proba)
             action = self.actions[action]
@@ -300,6 +287,7 @@ class KnightBrain(nn.Module):
 def load_prenet(obs_shape, file_path, device=None):
     prenet = PreNet(*obs_shape)
     prenet = load_weights(prenet, file_path, device=device)
+    return prenet
 
 def load_brain(obs_shape, dir_path, brain_type='archer', device=None, **kwargs):
     p = os.path.join(dir_path, 'prenet.pth')
@@ -324,7 +312,7 @@ def load_brain(obs_shape, dir_path, brain_type='archer', device=None, **kwargs):
 
 def load_value(obs_shape, dir_path, device=None, **kwargs):
     p = os.path.join(dir_path, 'prenet.pth')
-    prenet = load_prenet(obs_shape, p, device)
+    prenet = load_prenet(obs_shape, p, device, **kwargs)
 
     value = ValueNet(prenet=prenet)
 
