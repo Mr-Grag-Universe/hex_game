@@ -37,7 +37,7 @@ def evaluate_rewards(game, policy, n_games=1, t_max=1000, device='cuda'):
         s = game.reset()
         R = [0, 0]
         t = 0
-        mem_1, mem_2 = torch.zeros(1, 256, dtype=torch.float32, device=device), torch.zeros(1, 256, dtype=torch.float32, device=device)
+        mem_1, mem_2 = torch.zeros(1, 128, dtype=torch.float32, device=device), torch.zeros(1, 128, dtype=torch.float32, device=device)
         for _ in range(t_max):
             act = policy[game.team_counter.get()].act(np.array([s]), mem_1=mem_1, mem_2=mem_2)
             dist, actions = act['dist'], act['actions']

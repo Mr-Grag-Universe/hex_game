@@ -15,7 +15,7 @@ class GameRunner:
 
         self.t = self.game.team_counter.get()
         self.latest_observation = self.game.reset()
-        self.memory = (torch.zeros(256, dtype=torch.float32, device=self.device), torch.zeros(256, dtype=torch.float32, device=self.device))
+        self.memory = (torch.zeros(128, dtype=torch.float32, device=self.device), torch.zeros(128, dtype=torch.float32, device=self.device))
 
     def reset(self):
         """ Resets env and runner states. """
@@ -60,7 +60,7 @@ class GameRunner:
             if done:
                 # print("reset")
                 self.latest_observation = self.game.reset()
-                self.memory = (torch.zeros(256, dtype=torch.float32, device=self.device), torch.zeros(256, dtype=torch.float32, device=self.device))
+                self.memory = (torch.zeros(128, dtype=torch.float32, device=self.device), torch.zeros(128, dtype=torch.float32, device=self.device))
             self.t = self.game.team_counter.get()
 
         for i in range(2):
