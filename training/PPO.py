@@ -257,3 +257,4 @@ class PPO:
 
         # this is for logging
         self.iteration += 1
+        return loss

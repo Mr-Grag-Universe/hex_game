@@ -56,7 +56,7 @@ def evaluate_rewards(game, policy, n_games=1, t_max=1000, device='cuda'):
                     'winners' : np.array(winners)}
     return eval_res
 
-def plot_learning_stats(eval_results, plot_both=False):
+def plot_learning_stats(eval_results, loss_history, plot_both=False):
     r_1 = np.array([eval['r_1'] for eval in eval_results]).flatten()
     r_2 = np.array([eval['r_2'] for eval in eval_results]).flatten()
     r_1_mean = np.array([eval['r_1'].mean() for eval in eval_results])
@@ -67,7 +67,7 @@ def plot_learning_stats(eval_results, plot_both=False):
     })
 
     schema = '''
-        AAABB
+        AAABBCC
     '''
     # Clear current figure
     plt.clf()
@@ -76,11 +76,19 @@ def plot_learning_stats(eval_results, plot_both=False):
     
     plot_rewards(r_1_mean, all_r, ax=axs['A'])
     plot_compare(r_1_mean, r_2_mean, all_r, ax=axs['B'])
+    plot_loss(loss_history, axs[2])
 
     plt.tight_layout()
     plt.draw()  # Force redraw
     plt.pause(0.1)  # Process GUI events
     plt.close()  # Close figure to prevent memory leaks
+
+def plot_loss(loss_history, ax=None):
+    if ax is None:
+        fig, ax = plt.subplots()
+    ax.plot(loss_history)
+    ax.grid(True)
+    ax.set_title('Loss')
 
 def plot_rewards(reward, all_r, ax=None):
     if ax is None:
